@@ -37,9 +37,9 @@
         android:id="@+id/dialogMessage"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Qual via deseja fazer reimprissão?"
-        android:textSize="16sp"
         android:paddingTop="8dp"
+        android:text="Qual via deseja fazer reimpressão?"
+        android:textSize="16sp"
         tools:ignore="HardcodedText" />
 
     <LinearLayout

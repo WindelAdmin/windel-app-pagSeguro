@@ -239,10 +239,12 @@ class MainActivity : AppCompatActivity() {
 
                     try {
                         if (response.body.contentLength() == 0L) {
+                            runOnUiThread {
+                                setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                            }
                             response.close()
                             call.cancel()
                             openDialogPaymentNotFound()
-                            setLottieAnimation(R.raw.sync_idle, 500, 500, false)
                             buttonFindPayment.isClickable = true
                             return
                         }
@@ -289,12 +291,10 @@ class MainActivity : AppCompatActivity() {
     private fun listenEventsPlugPag(){
         plugPag.setEventListener(object : PlugPagEventListener {
             override fun onEvent(data: PlugPagEventData) {
-                if(data.eventCode >= 0) {
-
+                    runBlocking {
                         data.customMessage?.let {
                             lblStatus.text = it
                         }
-
                 }
 
                 if(data.eventCode == 18) {
@@ -316,6 +316,11 @@ class MainActivity : AppCompatActivity() {
                     return
                 }
 
+                if(data.eventCode == 7) {
+                    setLottieAnimation(R.raw.remove_card, 400, 400, true)
+                    return
+                }
+
                 buttonCancel.isEnabled = false
                 buttonCancel.isVisible = false
             }
@@ -333,13 +338,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 "CREDITO" -> {
                     typePayment = PlugPag.TYPE_CREDITO
+                    installmentsType = PlugPag.INSTALLMENT_TYPE_PARC_VENDEDOR
                 }
                 "PARCELADO_EMISSOR" -> {
-                    typePayment = PlugPag.INSTALLMENT_TYPE_PARC_COMPRADOR
+                    typePayment = PlugPag.TYPE_CREDITO
                     installmentsType = PlugPag.INSTALLMENT_TYPE_PARC_COMPRADOR
                 }
                 "PARCELADO_LOJISTA" -> {
-                    typePayment = PlugPag.INSTALLMENT_TYPE_PARC_VENDEDOR
+                    typePayment = PlugPag.TYPE_CREDITO
                     installmentsType = PlugPag.INSTALLMENT_TYPE_PARC_VENDEDOR
                 }
                 "VOUCHER" -> {
@@ -768,12 +774,15 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private var currentAnimationLottieId: Int = -1
     private fun setLottieAnimation(animation: Int, width: Int, height: Int, isLooping: Boolean) {
+        if(currentAnimationLottieId == animation) return
         buttonFindPayment.setAnimation(animation)
         buttonFindPayment.layoutParams.width = width
         buttonFindPayment.layoutParams.height = height
         buttonFindPayment.loop(isLooping)
         buttonFindPayment.playAnimation()
+        currentAnimationLottieId = animation
     }
 
     private fun openDialogPaymentProcessing(data: DataPayment) {
