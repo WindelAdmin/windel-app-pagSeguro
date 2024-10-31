@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:padding="0dp"
+    tools:context=".MainActivity">
+
+
+    <TextView
+        android:id="@+id/textView"
+        android:layout_width="150dp"
+        android:layout_height="0dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="100dp"
+        android:fontFamily="@font/nexa_extra_light"
+        android:text="windel"
+        android:textColor="#0A2751"
+        android:textSize="42sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="@+id/imageView3"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="@+id/imageView3"
+        app:layout_constraintTop_toBottomOf="@+id/imageView3"
+        tools:ignore="HardcodedText" />
+
+    <ImageView
+        android:id="@+id/imageView3"
+        android:layout_width="250dp"
+        android:layout_height="120dp"
+        android:layout_marginTop="96dp"
+        android:cropToPadding="true"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.503"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@mipmap/logo_symbol"
+        tools:ignore="ContentDescription" />
+
+    <TextView
+        android:id="@+id/textView3"
+        android:layout_width="wrap_content"
+        android:layout_height="0dp"
+        android:layout_marginStart="150dp"
+        android:layout_marginTop="4dp"
+        android:fontFamily="@font/nex_heavy"
+        android:text="Pos"
+        android:textColor="#0A2751"
+        android:textSize="42sp"
+        android:textStyle="bold"
+        app:layout_constraintEnd_toEndOf="@+id/imageView3"
+        app:layout_constraintHorizontal_bias="0.458"
+        app:layout_constraintStart_toStartOf="@+id/imageView3"
+        app:layout_constraintTop_toBottomOf="@+id/imageView3"
+        tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/lblStatus"
+        android:layout_width="0dp"
+        android:layout_height="75dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="50dp"
+        android:layout_marginEnd="10dp"
+        android:text="Aguardando pedido de pagamento"
+        android:textAlignment="center"
+        android:textColor="#373737"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        app:layout_constraintBottom_toTopOf="@+id/lottieAnimationView"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/textView"
+        app:layout_constraintVertical_bias="0.755"
+        tools:ignore="HardcodedText" />
+
+    <com.airbnb.lottie.LottieAnimationView
+        android:id="@+id/lottieAnimationView"
+        android:layout_width="400dp"
+        android:layout_height="130dp"
+        android:layout_marginTop="-20dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.496"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/lblStatus"
+        app:lottie_loop="true"
+        tools:ignore="MissingConstraints" />
+
+    <ImageButton
+        android:id="@+id/buttonSettings"
+        android:layout_width="71dp"
+        android:layout_height="70dp"
+        android:layout_marginTop="-10dp"
+        android:layout_marginEnd="5dp"
+        android:background="#00FFFFFF"
+        android:contentDescription="Settings Button"
+        android:padding="16dp"
+        android:paddingStart="16dp"
+        android:paddingLeft="16dp"
+        android:paddingTop="16dp"
+        android:paddingEnd="16dp"
+        android:paddingRight="16dp"
+        android:scaleX="0.4"
+        android:scaleY="0.4"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toEndOf="@+id/imageView3"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@mipmap/icon_button_settings_foreground"
+        tools:ignore="HardcodedText" />
+
+    <ImageButton
+        android:id="@+id/buttonExit"
+        android:layout_width="71dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="-10dp"
+        android:layout_marginTop="-10dp"
+        android:background="#00FFFFFF"
+        android:contentDescription="Exit Button"
+        android:scaleX="0.4"
+        android:scaleY="0.4"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@mipmap/icon_button_exit_foreground"
+        tools:ignore="HardcodedText" />
+
+    <ImageButton
+        android:id="@+id/buttonReprint"
+        android:layout_width="71dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="43dp"
+        android:layout_marginTop="-10dp"
+        android:background="#00FFFFFF"
+        android:contentDescription="Reimpressão"
+        android:scaleX="0.4"
+        android:scaleY="0.4"
+        app:layout_constraintStart_toEndOf="@+id/buttonExit"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@mipmap/icon_button_cupon_foreground"
+        tools:ignore="HardcodedText" />
+
+    <ImageButton
+        android:id="@+id/buttonReversal"
+        android:layout_width="71dp"
+        android:layout_height="70dp"
+        android:layout_marginStart="43dp"
+        android:layout_marginTop="-10dp"
+        android:background="#00FFFFFF"
+        android:contentDescription="Estorno"
+        android:scaleX="0.4"
+        android:scaleY="0.4"
+        app:layout_constraintStart_toEndOf="@+id/buttonReprint"
+        app:layout_constraintTop_toTopOf="parent"
+        app:srcCompat="@mipmap/icon_button_reversal_foreground"
+        tools:ignore="HardcodedText" />
+
+    <Button
+        android:id="@+id/buttonCloseDialog"
+        android:layout_width="0dp"
+        android:layout_height="60dp"
+        android:background="@drawable/gradient_red"
+        android:text="CANCELAR"
+        android:textColor="#FFFFFF"
+        android:textSize="18sp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintWidth="spread"
+        tools:ignore="HardcodedText" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

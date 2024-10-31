@@ -1,5 +1,6 @@
 package br.com.windel.pos
 
+import android.annotation.SuppressLint
 import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
@@ -9,13 +10,13 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.LayoutInflater
 import android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.ActivityResultLauncher
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -25,11 +26,13 @@ import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPag
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagActivationData
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventData
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagEventListener
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagInitializationResult
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagPaymentData
 import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagTransactionResult
+import br.com.uol.pagseguro.plugpagservice.wrapper.PlugPagVoidData
 import br.com.windel.pos.data.dtos.DataPayment
 import br.com.windel.pos.data.dtos.DataPaymentResponse
-import br.com.windel.pos.data.dtos.TransactionData
+import br.com.windel.pos.data.dtos.TransactionResultData
 import br.com.windel.pos.data.entities.PaymentEntity
 import br.com.windel.pos.database.AppDatabase
 import br.com.windel.pos.enums.ErrorEnum
@@ -52,18 +55,23 @@ import java.net.URL
 
 class MainActivity : AppCompatActivity() {
     private lateinit var buttonExit: ImageButton
+    private lateinit var buttonReprint: ImageButton
+    private lateinit var buttonReversal: ImageButton
     private lateinit var buttonSettings: ImageButton
+    private lateinit var buttonFindPayment: LottieAnimationView
     private lateinit var buttonCancel: Button
     private lateinit var lblStatus: TextView
     private lateinit var currentOrderId: String
-    private lateinit var lottieAnimationView: LottieAnimationView
+    var transactionResultCode = -1
+
     private lateinit var context: Context
-    private lateinit var plugpag: PlugPag
 
     private val paymentService = ApiService()
+    private lateinit var plugPag: PlugPag
 
     companion object {
         var SERIAL: String = ""
+        var CODIGO_ATIVACAO = ""
 
         fun getSerial(): String {
             return SERIAL
@@ -73,6 +81,13 @@ class MainActivity : AppCompatActivity() {
             SERIAL = serial
         }
 
+        fun getCodigoAtivacao(): String {
+            return CODIGO_ATIVACAO
+        }
+
+        fun setCodigoAtivacao(codigoAtivacao: String) {
+            CODIGO_ATIVACAO = codigoAtivacao
+        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -85,8 +100,8 @@ class MainActivity : AppCompatActivity() {
         )
 
         context = this
-        plugpag = PlugPag(context);
 
+        plugPag = PlugPag(context)
         setSharedPref()
 
         currentOrderId = ""
@@ -94,34 +109,45 @@ class MainActivity : AppCompatActivity() {
         lblStatus.text = ""
         buttonSettings = findViewById(R.id.buttonSettings)
         buttonExit = findViewById(R.id.buttonExit);
-        buttonCancel = findViewById(R.id.buttonCancel)
-        lottieAnimationView = findViewById(R.id.lottieAnimationView)
-        lottieAnimationView.setAnimation(R.raw.sync_idle)
-        lottieAnimationView.playAnimation()
+        buttonReprint = findViewById(R.id.buttonReprint)
+        buttonReversal = findViewById(R.id.buttonReversal)
+        buttonCancel = findViewById(R.id.buttonCloseDialog)
+        buttonFindPayment = findViewById(R.id.lottieAnimationView)
+        buttonFindPayment.setAnimation(R.raw.sync_idle)
+        buttonFindPayment.playAnimation()
 
         buttonCancel.isEnabled = false
         buttonCancel.isVisible = false
 
-        val layoutParams = lottieAnimationView.layoutParams
+        runOnUiThread {
+            lblStatus.text = ""
+            buttonFindPayment.setAnimation(R.raw.sync_idle)
+            buttonFindPayment.playAnimation()
+            buttonFindPayment.layoutParams.width = 500
+            buttonFindPayment.layoutParams.height = 500
+        }
+
+        buttonExit.setOnClickListener {
+            finish()
+        }
+
+        buttonReprint.setOnClickListener {
+            reprint()
+        }
+
+        buttonReversal.setOnClickListener {
+            showDialogReversal()
+        }
 
         buttonSettings.setOnClickListener {
             val intent = Intent(this, SettingsActivity::class.java)
             startActivity(intent)
         }
 
-        runOnUiThread {
-            lblStatus.text = ""
-            lottieAnimationView.setAnimation(R.raw.sync_idle)
-            lottieAnimationView.playAnimation()
-            layoutParams.width = 500
-            layoutParams.height = 500
-            lottieAnimationView.layoutParams = layoutParams
-        }
-
-        lottieAnimationView.setOnClickListener {
+        buttonFindPayment.setOnClickListener {
             runOnUiThread {
-                lottieAnimationView.setAnimation(R.raw.sync_loading)
-                lottieAnimationView.playAnimation()
+                buttonFindPayment.setAnimation(R.raw.sync_loading)
+                buttonFindPayment.playAnimation()
                 lblStatus.text = ""
             }
 
@@ -135,22 +161,18 @@ class MainActivity : AppCompatActivity() {
         buttonCancel.setOnClickListener {
             CoroutineScope(Dispatchers.Main).launch {
                 withContext(Dispatchers.IO) {
-                    plugpag.abort()
+                    plugPag.abort()
                 }
             }
         }
-
-        buttonExit.setOnClickListener {
-            finish()
-        }
-
-        checkProccessingPayment()
 
         CoroutineScope(Dispatchers.Main).launch {
             withContext(Dispatchers.IO) {
                 assertPayment()
             }
         }
+
+        checkProcessingPayment()
 
     }
 
@@ -159,6 +181,7 @@ class MainActivity : AppCompatActivity() {
         setSharedPref()
     }
 
+    @SuppressLint("HardwareIds")
     private fun setSharedPref() {
         val sharedPreferences = getSharedPreferences("windelConfig", Context.MODE_PRIVATE)
         val editor = sharedPreferences.edit()
@@ -195,12 +218,18 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun activatePlugPag(): PlugPagInitializationResult {
+        return plugPag.initializeAndActivatePinpad(PlugPagActivationData(
+            getCodigoAtivacao()
+        ));
+    }
+
     private fun checkPayments() {
-        lottieAnimationView.isClickable = false
-        if (checkInternetConnection(this)) {
+        buttonFindPayment.isClickable = false
+        if (checkInternetConnection()) {
             paymentService.findPayment(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    setLottieToSyncIdle()
+                    setLottieAnimation(R.raw.sync_idle, 500, 500, false)
                     e.printStackTrace()
                     call.cancel()
                 }
@@ -213,8 +242,8 @@ class MainActivity : AppCompatActivity() {
                             response.close()
                             call.cancel()
                             openDialogPaymentNotFound()
-                            setLottieToSyncIdle()
-                            lottieAnimationView.isClickable = true
+                            setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                            buttonFindPayment.isClickable = true
                             return
                         }
 
@@ -241,6 +270,56 @@ class MainActivity : AppCompatActivity() {
                 setLottieAnimation(R.raw.sync_idle, 500, 500, true)
             }
         }
+    }
+
+    private fun openDialogPaymentNotFound() {
+        runOnUiThread {
+            val builder = AlertDialog.Builder(context)
+            builder.setCancelable(false)
+            builder.setTitle("Ops!")
+            builder.setMessage("Nenhum pedido de pagamento encontrado.")
+            builder.setPositiveButton("Ok") { dialog, which ->
+                dialog.dismiss()
+            }
+
+            builder.show()
+        }
+    }
+
+    private fun listenEventsPlugPag(){
+        plugPag.setEventListener(object : PlugPagEventListener {
+            override fun onEvent(data: PlugPagEventData) {
+                if(data.eventCode >= 0) {
+
+                        data.customMessage?.let {
+                            lblStatus.text = it
+                        }
+
+                }
+
+                if(data.eventCode == 18) {
+                    transactionResultCode = data.eventCode
+                    setLottieAnimation(R.raw.success, 200, 200, false)
+                    return
+                }
+
+                if(data.eventCode == 0) {
+                    setLottieAnimation(R.raw.contactless, 500, 500, true)
+                    buttonCancel.isEnabled = true
+                    buttonCancel.isVisible = true
+                    return
+                }
+
+                if(data.eventCode == 5) {
+                    if(transactionResultCode == 19) return
+                    setLottieAnimation(R.raw.loader, 400, 400, true)
+                    return
+                }
+
+                buttonCancel.isEnabled = false
+                buttonCancel.isVisible = false
+            }
+        })
     }
 
     private fun pay(paymentData: DataPayment) {
@@ -271,96 +350,135 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            var paymentDataPlugPag = PlugPagPaymentData(
+            val paymentDataPlugPag = PlugPagPaymentData(
                 typePayment,
                 paymentData.transactionValue.toInt(),
                 installmentsType,
                 paymentData.installments ?: 1,
-                "11ada11");
+                getSerial().substring(0, 9)
+            );
 
-
-            var initResult = plugpag.initializeAndActivatePinpad(PlugPagActivationData("749879"));
-
-            if (initResult.result == PlugPag.RET_OK) {
-
-                var transactionResultCode = -1
-
-                plugpag.setEventListener(object : PlugPagEventListener {
-                    override fun onEvent(data: PlugPagEventData) {
-                        if(data.eventCode >= 0) {
-                            runBlocking {
-                                data.customMessage?.let {
-                                    lblStatus.text = it
-                                }
-                            }
-                        }
-
-                        if(data.eventCode == 18) {
-                            transactionResultCode = data.eventCode
-                            setLottieAnimation(R.raw.success, 200, 200, false)
-                            return
-                        }
-
-                        if(data.eventCode == 0) {
-                            setLottieAnimation(R.raw.contactless, 500, 500, true)
-                            buttonCancel.isEnabled = true
-                            buttonCancel.isVisible = true
-                            return
-                        }
-
-                        if(data.eventCode == 5) {
-                            if(transactionResultCode == 19) return
-                            setLottieAnimation(R.raw.loader, 400, 400, true)
-                            return
-                        }
-
-                        buttonCancel.isEnabled = false
-                        buttonCancel.isVisible = false
-                    }
-                })
-
-                var result = plugpag.doPayment(paymentDataPlugPag);
-
-                if(result.errorCode == "0000") {
-                    if(transactionResultCode == -1) {
-                        runBlocking {
-                            lblStatus.text = result.message
-                            setLottieAnimation(R.raw.failed, 250, 250, false)
-
-                            delay(5000L)
-                        }
-                        return
-                    }
-
-                    runOnUiThread {
-                        lblStatus.text = ""
-                        setLottieAnimation(R.raw.sync_idle, 500, 500, true)
-                    }
-                }
-                else {
-                    runOnUiThread {
-                        lblStatus.text = result.message
-                        setLottieAnimation(R.raw.failed, 250, 250, false)
-                    }
-
-                    Thread.sleep(3500)
-
-                    runOnUiThread {
-                        lblStatus.text = ""
-                        setLottieAnimation(R.raw.sync_idle, 500, 500, true)
-                    }
-                }
-
+            if (activatePlugPag().result == PlugPag.RET_OK) {
+                listenEventsPlugPag()
+                val result = plugPag.doPayment(paymentDataPlugPag);
                 resolveTransactionResult(result)
-
-
             }
         } catch (e: Exception) {
             showToast(e.message ?: "")
         }
     }
 
-    private fun resolveTransactionResult(plugPagTransactionResult: PlugPagTransactionResult) {
+    private fun reversal(nsu: String) {
+        runOnUiThread {
+            lblStatus.text = "PROCESSANDO"
+            setLottieAnimation(R.raw.loader, 400, 400, false)
+        }
+
+        if (checkInternetConnection()) {
+            paymentService.findPaymentByNsu(nsu, object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    runOnUiThread {
+                        lblStatus.text = ""
+                        setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                        showToast(e.message.toString())
+                    }
+                    call.cancel()
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    runOnUiThread {
+                        lblStatus.text = ""
+                        setLottieAnimation(R.raw.loader, 400, 400, false)
+                    }
+
+                    if (!response.isSuccessful) throw IOException("Requisição mal sucedida: $response")
+
+                    try {
+                        if (response.body.contentLength() == 0L) {
+                            runOnUiThread {
+                                lblStatus.text = ""
+                                setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                            }
+                            response.close()
+                            call.cancel()
+                            buttonFindPayment.isClickable = true
+                            return
+                        }
+
+                        val data = Gson().fromJson(response.body.string(), DataPayment::class.java)
+
+                        response.close()
+                        call.cancel()
+
+                        val initResult = plugPag.initializeAndActivatePinpad(
+                            PlugPagActivationData(
+                                getCodigoAtivacao()
+                            )
+                        );
+
+                        if (initResult.result == PlugPag.RET_OK) {
+                            CoroutineScope(Dispatchers.Main).launch {
+                                withContext(Dispatchers.IO) {
+                                    listenEventsPlugPag()
+                                    val result = plugPag.voidPayment(
+                                        PlugPagVoidData(
+                                            data.transactionCode ?: "",
+                                            data.transactionIdInTerminal ?: "",
+                                            true
+                                        )
+                                    )
+                                    resolveTransactionResult(result)
+                                }
+                            }
+                        }
+                    } catch (e: Exception) {
+                        showToast(e.message.toString())
+                    }
+                }
+            })
+        } else {
+            runOnUiThread {
+                lblStatus.text = ErrorEnum.CONNECTION_ERROR.value
+                lblStatus.setTextColor(Color.parseColor("#a31a1a"))
+                setLottieAnimation(R.raw.sync_idle, 500, 500, true)
+            }
+        }
+    }
+
+    private fun resolveTransactionResult(result: PlugPagTransactionResult) {
+        if(result.errorCode == "0000") {
+            if(transactionResultCode == -1) {
+                runBlocking {
+                    lblStatus.text = result.message
+                    setLottieAnimation(R.raw.failed, 250, 250, false)
+                    delay(5000L)
+                }
+                return
+            }
+
+            runOnUiThread {
+                lblStatus.text = ""
+                setLottieAnimation(R.raw.sync_idle, 500, 500, true)
+            }
+        }
+        else {
+            runOnUiThread {
+                lblStatus.text = result.message
+                setLottieAnimation(R.raw.failed, 250, 250, false)
+            }
+
+            Thread.sleep(3500)
+
+            runOnUiThread {
+                lblStatus.text = ""
+                setLottieAnimation(R.raw.sync_idle, 500, 500, true)
+            }
+        }
+
+        resolvePaymentResult(result)
+    }
+
+    private fun resolvePaymentResult(plugPagTransactionResult: PlugPagTransactionResult) {
         var status = EventsEnum.EVENT_SUCCESS
         var error = ""
 
@@ -392,11 +510,14 @@ class MainActivity : AppCompatActivity() {
             PlugPag.TYPE_VOUCHER -> paymentType = "VOUCHER"
         }
 
-        val plugPagToDataResponse = TransactionData(
+        val plugPagToDataResponse = TransactionResultData(
             getSerial(),
             plugPagTransactionResult.cardBrand,
             paymentType,
-            plugPagTransactionResult.hostNsu,
+            plugPagTransactionResult.nsu,
+            plugPagTransactionResult.nsu,
+            currentOrderId,
+            plugPagTransactionResult.transactionCode,
             plugPagTransactionResult.transactionId,
             error
         )
@@ -405,17 +526,14 @@ class MainActivity : AppCompatActivity() {
             status.value, plugPagToDataResponse
         )
 
-        if (checkInternetConnection(this)) {
-            data.data?.terminalSerial = getSerial()
-            data.data?.orderId = currentOrderId
-
+        if (checkInternetConnection()) {
             if (data.status === EventsEnum.EVENT_SUCCESS.value) {
                 paymentService.sendSuccessPayment(data, {}, {})
 
             }   else if (data.status === EventsEnum.EVENT_CANCELED.value)
                 paymentService.sendCanceledPayment(currentOrderId, {
                 }, {
-                    setLottieServerError()
+                    showServerError()
                 })
             else
                 paymentService.sendFailedPayment(
@@ -427,89 +545,159 @@ class MainActivity : AppCompatActivity() {
             saveOnDatabase(data)
         }
 
-        lottieAnimationView.isClickable = true
+        buttonFindPayment.isClickable = true
     }
-    private fun checkProccessingPayment() {
-        paymentService.findPaymentProcessing(object : Callback {
-            override fun onFailure(call: Call, e: IOException) {
-                e.printStackTrace()
-                call.cancel()
+
+    private fun reprint() {
+        val inflater = LayoutInflater.from(context)
+        val view = inflater.inflate(R.layout.dialog_reprint, null)
+
+        val buttonCancel = view.findViewById<ImageButton>(R.id.buttonCloseDialog)
+        val buttonOption1 = view.findViewById<Button>(R.id.buttonOption1)
+        val buttonOption2 = view.findViewById<Button>(R.id.buttonOption2)
+
+        val builder = AlertDialog.Builder(context)
+        builder.setCancelable(false)
+        builder.setView(view)
+
+        try {
+            val dialog = builder.create()
+            dialog.show()
+
+            buttonCancel.setOnClickListener {
+                dialog.dismiss()
             }
 
-            override fun onResponse(call: Call, response: Response) {
-                try {
-                    if (response.body.contentLength() == 0L) {
-                        response.close()
-                        call.cancel()
-                        return
+            buttonOption1.setOnClickListener {
+                dialog.dismiss()
+                val dialogLoading = showDialogLoading("imprimindo...")
+                CoroutineScope(Dispatchers.Main).launch {
+                    withContext(Dispatchers.IO) {
+                        reprintCustomerCoupon()
+                        dialogLoading.dismiss()
                     }
-
-                    val data = Gson().fromJson(response.body.string(), DataPayment::class.java)
-
-                    currentOrderId = data.orderId
-
-                    openDialogPaymentProcessing(data)
-                } catch (e: Exception) {
-                    Log.e(this.javaClass.name, e.message.toString())
                 }
             }
-        })
+
+            buttonOption2.setOnClickListener {
+                dialog.dismiss()
+                val dialogLoading = showDialogLoading("imprimindo...")
+                CoroutineScope(Dispatchers.Main).launch {
+                    withContext(Dispatchers.IO) {
+                        reprintEstablishmentCoupon()
+                        dialogLoading.dismiss()
+                    }
+                }
+            }
+        }catch(e: Exception) {
+            e.printStackTrace()
+        }
     }
 
-    //STORAGE LOCAL
+    private fun reprintCustomerCoupon() {
+        if(activatePlugPag().result == 0) {
+            plugPag.reprintCustomerReceipt()
+        }
+    }
+
+    private fun reprintEstablishmentCoupon() {
+        if(activatePlugPag().result == 0) {
+            plugPag.reprintStablishmentReceipt()
+        }
+    }
+
+    private fun checkProcessingPayment() {
+        if(checkInternetConnection()) {
+            paymentService.findPaymentProcessing(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    Toast.makeText(context, e.message.toString(), Toast.LENGTH_LONG).show()
+                    call.cancel()
+                }
+
+                override fun onResponse(call: Call, response: Response) {
+                    try {
+                        if (response.body.contentLength() == 0L) {
+                            response.close()
+                            call.cancel()
+                            return
+                        }
+
+                        val data = Gson().fromJson(response.body.string(), DataPayment::class.java)
+
+                        currentOrderId = data.orderId
+
+                        openDialogPaymentProcessing(data)
+                    } catch (e: Exception) {
+                        Toast.makeText(context, e.message.toString(), Toast.LENGTH_LONG).show()
+                    }
+                }
+            })
+        } else {
+            showConnectionError()
+        }
+    }
+
     private suspend fun assertPayment() {
         try {
             val db = Room.databaseBuilder(
                 applicationContext,
                 AppDatabase::class.java, "payments-backup"
             ).build()
+
             val paymentsPendingToReturn = db.paymentDao().getAll()
 
             if (paymentsPendingToReturn.isNotEmpty()) {
-                paymentsPendingToReturn.forEach {
-                    it
 
-                    val data = DataPaymentResponse(
-                        it.status,
-                        TransactionData(
-                            it?.terminalSerial,
-                            it?.flag,
-                            it?.transactionType,
-                            it?.authorization,
-                            it?.nsu,
-                            it?.orderId,
-                            it?.error
+                if(checkInternetConnection()) {
+                    paymentsPendingToReturn.forEach {
+
+                        val data = DataPaymentResponse(
+                            it.status,
+                            TransactionResultData(
+                                it.terminalSerial,
+                                it.flag,
+                                it.transactionType,
+                                it.authorization,
+                                it.nsu,
+                                it.orderId,
+                                it.error
+                            )
                         )
-                    )
 
-                    if (data.status === EventsEnum.EVENT_SUCCESS.value)
-                        paymentService.sendSuccessPayment(data, { setLottieToSyncIdle() }, {
-                            setLottieErrorRequest()
-                        })
-                    else if (data.status === EventsEnum.EVENT_CANCELED.value)
-                        paymentService.sendCanceledPayment(
-                            currentOrderId,
-                            { setLottieToSyncIdle()},
-                            {
-                                setLottieErrorRequest()
+                        if (data.status === EventsEnum.EVENT_SUCCESS.value)
+                            paymentService.sendSuccessPayment(data, {
+                                setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                            }, {
+                                showServerError()
                             })
-                    else
-                        paymentService.sendFailedPayment(
-                            data.data?.error.orEmpty(),
-                            currentOrderId,
-                            { setLottieToSyncIdle()},
-                            {
-                                setLottieErrorRequest()
-                            })
+                        else if (data.status === EventsEnum.EVENT_CANCELED.value)
+                            paymentService.sendCanceledPayment(
+                                currentOrderId,
+                                {
+                                    setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                                },
+                                {
+                                    showServerError()
+                                })
+                        else
+                            paymentService.sendFailedPayment(
+                                data.data?.error.orEmpty(),
+                                currentOrderId,
+                                {
+                                    setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                                },
+                                {
+                                    showServerError()
+                                })
 
-                    db.paymentDao().delete(it)
+                        db.paymentDao().delete(it)
+                    }
+                } else {
+                    showConnectionError()
                 }
             }
         } catch (e: IOException) {
-            runOnUiThread {
-                lblStatus.text = e.message.toString()
-            }
-            Log.e(this.javaClass.name, e.message.toString())
+            showToast(e.message ?: "")
         }
     }
 
@@ -535,10 +723,10 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch {
             try {
                 db.paymentDao().insert(paymentModel)
-                setLottieToSyncIdle()
+                setLottieAnimation(R.raw.sync_idle, 500, 500, false)
             } catch (e: Exception) {
                 runOnUiThread {
-                    setLottieToSyncIdle()
+                    setLottieAnimation(R.raw.sync_idle, 500, 500, false)
                     lblStatus.text = e.message.toString()
                     Log.e(this.javaClass.name, e.message.toString())
                 }
@@ -546,7 +734,8 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    fun checkInternetConnection(context: Context): Boolean {
+    @SuppressLint("ObsoleteSdkInt")
+    fun checkInternetConnection(): Boolean {
         val connectivityManager =
             context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
@@ -560,11 +749,10 @@ class MainActivity : AppCompatActivity() {
 
         return when {
             networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> {
-                true // Está conectado ao Wi-Fi, presumimos que há internet
+                true
             }
 
             networkCapabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> {
-                // Está conectado aos dados móveis, verificamos se há internet
                 return try {
                     val url = URL("https://www.google.com")
                     val urlConnection = url.openConnection() as HttpURLConnection
@@ -580,13 +768,21 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private fun setLottieAnimation(animation: Int, width: Int, height: Int, isLooping: Boolean) {
+        buttonFindPayment.setAnimation(animation)
+        buttonFindPayment.layoutParams.width = width
+        buttonFindPayment.layoutParams.height = height
+        buttonFindPayment.loop(isLooping)
+        buttonFindPayment.playAnimation()
+    }
+
     private fun openDialogPaymentProcessing(data: DataPayment) {
         runOnUiThread {
             val builder = AlertDialog.Builder(context)
             builder.setCancelable(false)
             builder.setTitle("Ops!")
             builder.setMessage("Você possui um pagamento em aberto, o que deseja fazer?")
-            builder.setPositiveButton("Refazer Pagamento") { dialog, which ->
+            builder.setPositiveButton("Refazer Pagamento") { _, _ ->
                 CoroutineScope(Dispatchers.Main).launch {
                     withContext(Dispatchers.IO) {
                             pay(data)
@@ -594,13 +790,13 @@ class MainActivity : AppCompatActivity() {
                     }
             }
 
-            builder.setNegativeButton("Cancelar") { dialog, which ->
+            builder.setNegativeButton("Cancelar") { dialog, _ ->
                 dialog.cancel()
 
                 val progressDialog = ProgressDialog(context)
-                progressDialog?.setMessage("Cancelando pagamento..")
-                progressDialog?.setCancelable(false)
-                progressDialog?.show()
+                progressDialog.setMessage("Cancelando pagamento..")
+                progressDialog.setCancelable(false)
+                progressDialog.show()
 
                 try {
                     runBlocking {
@@ -610,13 +806,13 @@ class MainActivity : AppCompatActivity() {
                                     progressDialog.dismiss()
                                 }, {
                                     progressDialog.dismiss()
-                                    setLottieErrorRequest()
+                                    showServerError()
                                 })
 
                     }
                 } catch (e: Exception) {
                     progressDialog.dismiss()
-                    Log.e(this.javaClass.name, e.message.toString())
+                    showToast(e.message ?: "")
                 }
             }
 
@@ -625,65 +821,57 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun openDialogPaymentNotFound() {
-        runOnUiThread {
-            val builder = AlertDialog.Builder(context)
-            builder.setCancelable(false)
-            builder.setTitle("Ops!")
-            builder.setMessage("Nenhum pedido de pagamento encontrado.")
-            builder.setPositiveButton("Ok") { dialog, which ->
+    private fun showDialogReversal() {
+        val inflater = LayoutInflater.from(context)
+        val view = inflater.inflate(R.layout.dialog_reversal, null)
+
+        val editTextNsu = view.findViewById<EditText>(R.id.editTextNsu)
+        val buttonOption1 = view.findViewById<Button>(R.id.buttonOption1)
+        val buttonOption2 = view.findViewById<Button>(R.id.buttonOption2)
+
+        val builder = AlertDialog.Builder(context)
+        builder.setCancelable(false)
+        builder.setView(view)
+
+        try {
+            val dialog = builder.create()
+            dialog.show()
+
+            buttonOption1.setOnClickListener {
                 dialog.dismiss()
             }
 
-            builder.show()
+            buttonOption2.setOnClickListener {
+                val nsu = editTextNsu.text
+                if(nsu.isNotBlank()){
+                    CoroutineScope(Dispatchers.Main).launch {
+                        withContext(Dispatchers.IO) {
+                            reversal(nsu.toString())
+                        }
+                    }
+                    dialog.dismiss()
+                } else {
+                    showToast("Preencha o NSU para continuar.")
+                    editTextNsu.requestFocus()
+                }
+
+            }
+        }catch(e: Exception) {
+            e.printStackTrace()
         }
     }
 
-    private fun setLottieToSyncIdle() {
-        runOnUiThread {
-            val layoutParams = lottieAnimationView.layoutParams
-            lottieAnimationView.setAnimation(R.raw.sync_idle)
-            lottieAnimationView.playAnimation()
-            layoutParams.width = 500
-            layoutParams.height = 500
-            lottieAnimationView.layoutParams = layoutParams
-        }
-    }
-
-    private fun setLottieServerError() {
+    private fun showServerError() {
         runOnUiThread {
             lblStatus.text = ErrorEnum.SERVER_ERROR.value
             lblStatus.setTextColor(Color.parseColor("#a31a1a"))
         }
     }
 
-    private fun setLottieErrorRequest() {
+    private fun showConnectionError() {
         runOnUiThread {
-            lblStatus.text = "Houve algum erro na requisição."
+            lblStatus.text = ErrorEnum.CONNECTION_ERROR.value
             lblStatus.setTextColor(Color.parseColor("#a31a1a"))
-        }
-    }
-
-    private fun setLottieAnimation(animation: Int, width: Int, height: Int, isLooping: Boolean) {
-            lottieAnimationView.setAnimation(animation)
-            lottieAnimationView.layoutParams.width = width
-            lottieAnimationView.layoutParams.height = height
-            lottieAnimationView.loop(isLooping)
-            lottieAnimationView.playAnimation()
-    }
-
-    private fun showAlertDialog(title: String, msg: String, actionButton: Function<Unit>) {
-        runOnUiThread {
-            val builder = AlertDialog.Builder(context)
-            builder.setCancelable(false)
-            builder.setTitle(title)
-            builder.setMessage(msg)
-            builder.setPositiveButton("Ok") { dialog, which ->
-                dialog.dismiss()
-                actionButton.apply {}
-            }
-
-            builder.show()
         }
     }
 
@@ -691,5 +879,14 @@ class MainActivity : AppCompatActivity() {
         runOnUiThread {
             Toast.makeText(this, msg, Toast.LENGTH_LONG).show()
         }
+    }
+
+    private fun showDialogLoading(text: String): ProgressDialog {
+        val progressDialog = ProgressDialog(context)
+        progressDialog.setMessage(text)
+        progressDialog.setCancelable(false)
+        progressDialog.show()
+
+        return progressDialog
     }
 }

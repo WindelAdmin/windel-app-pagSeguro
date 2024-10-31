@@ -15,6 +15,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private lateinit var buttonBack: Button
     private lateinit var editTextSerial: EditText
+    private lateinit var editTextCodigoAtivacao: EditText
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,16 +27,20 @@ class SettingsActivity : AppCompatActivity() {
 
         buttonBack = findViewById(R.id.buttonExit);
         editTextSerial = findViewById(R.id.editTextSerial)
+        editTextCodigoAtivacao = findViewById(R.id.editTextCodigoAtivacao)
         editTextSerial.filters += InputFilter.AllCaps()
+        editTextCodigoAtivacao.filters += InputFilter.AllCaps()
 
         runOnUiThread {
             sharedPreferences.getString("terminalSerialNumber", "").let { editTextSerial.setText(it) }
+            sharedPreferences.getString("codigoAtivacao", "").let { editTextCodigoAtivacao.setText(it) }
         }
 
         buttonBack.setOnClickListener {
             super.onBackPressedDispatcher.addCallback(object : OnBackPressedCallback(true) {
                 override fun handleOnBackPressed() {
                     sharedPreferences.getString("terminalSerialNumber", "")?.let {  MainActivity.Companion.setSerial(it) }
+                    sharedPreferences.getString("codigoAtivacao", "")?.let {  MainActivity.Companion.setCodigoAtivacao(it) }
                     finish()
                 }
             })
@@ -46,8 +51,18 @@ class SettingsActivity : AppCompatActivity() {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
             override fun afterTextChanged(s: Editable?) {
-                MainActivity.SERIAL = s.toString()
+                MainActivity.setSerial(s.toString())
                 editor.putString("terminalSerialNumber", s.toString())
+                editor.apply()
+            }
+        })
+
+        editTextCodigoAtivacao.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                MainActivity.setCodigoAtivacao(s.toString())
+                editor.putString("codigoAtivacao", s.toString())
                 editor.apply()
             }
         })

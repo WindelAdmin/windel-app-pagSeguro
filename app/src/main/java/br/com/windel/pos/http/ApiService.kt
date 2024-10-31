@@ -1,8 +1,8 @@
 package br.com.windel.pos.http
 
-import android.os.Build
 import android.util.Log
 import br.com.windel.pos.BuildConfig
+import br.com.windel.pos.MainActivity
 import br.com.windel.pos.data.dtos.DataPaymentResponse
 import br.com.windel.pos.enums.EndpointEnum
 import br.com.windel.pos.gateways.BasicAuthInterceptor
@@ -20,7 +20,7 @@ class ApiService {
 
     fun findPayment(callback: Callback) {
         val request = Request.Builder()
-            .url("${EndpointEnum.GATEWAY_PAGBANK_TERMINAL.value}/${Build.SERIAL}")
+            .url("${EndpointEnum.GATEWAY_PAGBANK_TERMINAL.value}/${MainActivity.getSerial()}")
             .build()
 
         try {
@@ -32,7 +32,7 @@ class ApiService {
 
     fun findPaymentProcessing(callback: Callback) {
         val request = Request.Builder()
-            .url("${EndpointEnum.GATEWAY_PAGBANK_TERMINAL.value}/processing/${Build.SERIAL}")
+            .url("${EndpointEnum.GATEWAY_PAGBANK_TERMINAL.value}/processing/${MainActivity.getSerial()}")
             .build()
 
         try {
@@ -70,6 +70,8 @@ class ApiService {
                         .add("authorization", dataPayment.data?.authorization.orEmpty())
                         .add("nsu", dataPayment.data?.nsu.orEmpty())
                         .add("orderId", dataPayment.data?.orderId.orEmpty())
+                        .add("transactionCode", dataPayment.data?.transactionCode.orEmpty())
+                        .add("transactionIdInTerminal", dataPayment.data?.transactionIdInTerminal.orEmpty())
                         .build()
                 )
                 .build()
@@ -104,6 +106,18 @@ class ApiService {
 
             executeRequest(request, onSuccess, onFailed)
         } catch (e: IOException) {
+            Log.e(this.javaClass.name, e.message.toString())
+        }
+    }
+
+    fun findPaymentByNsu(nsu: String, callback: Callback) {
+        val request = Request.Builder()
+            .url("${EndpointEnum.GATEWAY_PAGBANK_NSU.value}/${nsu}")
+            .build()
+
+        try {
+            httpClient.newCall(request).enqueue(callback)
+        } catch (e: Exception) {
             Log.e(this.javaClass.name, e.message.toString())
         }
     }

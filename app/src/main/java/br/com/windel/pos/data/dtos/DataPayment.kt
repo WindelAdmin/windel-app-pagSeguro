@@ -8,5 +8,7 @@ data class DataPayment(
     val dayOfMonth: Int?,
     val expirationDate: Int?,
     val orderId: String,
-    val status: String
+    val status: String,
+    var transactionCode: String? = null,
+    var transactionIdInTerminal: String? = null,
 )
