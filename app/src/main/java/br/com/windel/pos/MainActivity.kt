@@ -5,18 +5,24 @@ import android.app.ProgressDialog
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.icu.text.DecimalFormat
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.LayoutInflater
+import android.view.View
 import android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN
 import android.widget.Button
 import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.TextView
 import android.widget.Toast
+import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
@@ -61,6 +67,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var buttonFindPayment: LottieAnimationView
     private lateinit var buttonCancel: Button
     private lateinit var lblStatus: TextView
+    private lateinit var lblTransactionValue: TextView
+    private lateinit var lblTransactionType: TextView
+    private lateinit var imgLogo: ImageView
+    private lateinit var txtLogo1: TextView
+    private lateinit var txtLogo2: TextView
+    private lateinit var divider: View
     private lateinit var currentOrderId: String
     var transactionResultCode = -1
 
@@ -107,6 +119,12 @@ class MainActivity : AppCompatActivity() {
         currentOrderId = ""
         lblStatus = findViewById(R.id.lblStatus);
         lblStatus.text = ""
+        lblTransactionValue = findViewById(R.id.lblTransactionValue)
+        lblTransactionType = findViewById(R.id.lblTransactionType)
+        imgLogo = findViewById(R.id.imgLogo)
+        txtLogo1 = findViewById(R.id.txtLogo1)
+        txtLogo2 = findViewById(R.id.txtLogo2)
+        divider = findViewById(R.id.divider)
         buttonSettings = findViewById(R.id.buttonSettings)
         buttonExit = findViewById(R.id.buttonExit);
         buttonReprint = findViewById(R.id.buttonReprint)
@@ -145,12 +163,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         buttonFindPayment.setOnClickListener {
-            runOnUiThread {
-                buttonFindPayment.setAnimation(R.raw.sync_loading)
-                buttonFindPayment.playAnimation()
-                lblStatus.text = ""
-            }
-
             CoroutineScope(Dispatchers.Main).launch {
                 withContext(Dispatchers.IO) {
                     checkPayments()
@@ -226,26 +238,34 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPayments() {
         buttonFindPayment.isClickable = false
+
+        runOnUiThread {
+            setLottieAnimation(R.raw.sync_loading, 500, 500, false)
+        }
+
         if (checkInternetConnection()) {
             paymentService.findPayment(object : Callback {
                 override fun onFailure(call: Call, e: IOException) {
-                    setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                    runOnUiThread {
+                        setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                    }
                     e.printStackTrace()
                     call.cancel()
                 }
 
+                @RequiresApi(Build.VERSION_CODES.N)
                 override fun onResponse(call: Call, response: Response) {
                     if (!response.isSuccessful) throw IOException("Requisição mal sucedida: $response")
 
                     try {
                         if (response.body.contentLength() == 0L) {
-                            runOnUiThread {
-                                setLottieAnimation(R.raw.sync_idle, 500, 500, false)
-                            }
                             response.close()
                             call.cancel()
                             openDialogPaymentNotFound()
                             buttonFindPayment.isClickable = true
+                            runOnUiThread {
+                                setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                            }
                             return
                         }
 
@@ -293,7 +313,11 @@ class MainActivity : AppCompatActivity() {
             override fun onEvent(data: PlugPagEventData) {
                     runBlocking {
                         data.customMessage?.let {
-                            lblStatus.text = it
+                            if(data.eventCode == 0) {
+                                lblStatus.text = "APROXIME, INSIRA OU PASSE O CARTÃO"
+                            } else {
+                                lblStatus.text = it
+                            }
                         }
                 }
 
@@ -307,7 +331,14 @@ class MainActivity : AppCompatActivity() {
                     setLottieAnimation(R.raw.contactless, 500, 500, true)
                     buttonCancel.isEnabled = true
                     buttonCancel.isVisible = true
+                    lblTransactionValue.isVisible = true
+                    lblTransactionType.isVisible = true
+                    divider.isVisible = true
                     return
+                } else {
+                    lblTransactionValue.isVisible = false
+                    lblTransactionType.isVisible = false
+                    divider.isVisible = false
                 }
 
                 if(data.eventCode == 5) {
@@ -327,10 +358,12 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun pay(paymentData: DataPayment) {
         try {
             var typePayment: Int = PlugPag.TYPE_DEBITO
             var installmentsType: Int = PlugPag.INSTALLMENT_TYPE_A_VISTA
+            var labelTypePaymentText = "DÉBITO"
 
             when(paymentData.transactionType) {
                 "DEBITO" -> {
@@ -339,20 +372,25 @@ class MainActivity : AppCompatActivity() {
                 "CREDITO" -> {
                     typePayment = PlugPag.TYPE_CREDITO
                     installmentsType = PlugPag.INSTALLMENT_TYPE_PARC_VENDEDOR
+                    labelTypePaymentText = "CRÉDITO"
                 }
                 "PARCELADO_EMISSOR" -> {
                     typePayment = PlugPag.TYPE_CREDITO
                     installmentsType = PlugPag.INSTALLMENT_TYPE_PARC_COMPRADOR
+                    labelTypePaymentText = "CRÉDITO PARCELADO ${paymentData.installments}x"
                 }
                 "PARCELADO_LOJISTA" -> {
                     typePayment = PlugPag.TYPE_CREDITO
                     installmentsType = PlugPag.INSTALLMENT_TYPE_PARC_VENDEDOR
+                    labelTypePaymentText = "CRÉDITO PARCELADO ${paymentData.installments}x"
                 }
                 "VOUCHER" -> {
                     typePayment = PlugPag.TYPE_VOUCHER
+                    labelTypePaymentText = "VOUCHER"
                 }
                 "PIX" -> {
                     typePayment = PlugPag.TYPE_PIX
+                    labelTypePaymentText = "PIX"
                 }
             }
 
@@ -365,6 +403,30 @@ class MainActivity : AppCompatActivity() {
             );
 
             if (activatePlugPag().result == PlugPag.RET_OK) {
+                runOnUiThread {
+                    val value = paymentData.transactionValue.toDouble() / 100
+                    val formatter = DecimalFormat("#,##0.00")
+                    lblTransactionValue.text = buildString {
+                        append("Valor: R$")
+                        append(formatter.format(value))
+                    }
+                    lblTransactionType.text = buildString {
+                        append(labelTypePaymentText)
+                    }
+                    divider.isVisible = false
+                    imgLogo.isVisible = false
+                    txtLogo1.isVisible = false
+                    txtLogo2.isVisible = false
+                    buttonExit.isClickable = false
+                    buttonReprint.isClickable = false
+                    buttonSettings.isClickable = false
+                    buttonReversal.isClickable = false
+                    buttonExit.isVisible = false
+                    buttonReprint.isVisible = false
+                    buttonSettings.isVisible = false
+                    buttonReversal.isVisible = false
+                }
+
                 listenEventsPlugPag()
                 val result = plugPag.doPayment(paymentDataPlugPag);
                 resolveTransactionResult(result)
@@ -402,8 +464,13 @@ class MainActivity : AppCompatActivity() {
                     try {
                         if (response.body.contentLength() == 0L) {
                             runOnUiThread {
-                                lblStatus.text = ""
-                                setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                                lblStatus.text = "NSU incorreto. Verifique o número informado."
+                                setLottieAnimation(R.raw.failed, 250, 250, false)
+
+                                Handler(Looper.getMainLooper()).postDelayed({
+                                    lblStatus.text = ""
+                                    setLottieAnimation(R.raw.sync_idle, 500, 500, false)
+                                }, 3500)
                             }
                             response.close()
                             call.cancel()
@@ -551,7 +618,20 @@ class MainActivity : AppCompatActivity() {
             saveOnDatabase(data)
         }
 
-        buttonFindPayment.isClickable = true
+        runOnUiThread {
+            buttonFindPayment.isClickable = true
+            buttonExit.isClickable = true
+            buttonReprint.isClickable = true
+            buttonSettings.isClickable = true
+            buttonReversal.isClickable = true
+            buttonExit.isVisible = true
+            buttonReprint.isVisible = true
+            buttonSettings.isVisible = true
+            buttonReversal.isVisible = true
+            imgLogo.isVisible = true
+            txtLogo1.isVisible = true
+            txtLogo2.isVisible = true
+        }
     }
 
     private fun reprint() {
@@ -620,6 +700,7 @@ class MainActivity : AppCompatActivity() {
                     call.cancel()
                 }
 
+                @RequiresApi(Build.VERSION_CODES.N)
                 override fun onResponse(call: Call, response: Response) {
                     try {
                         if (response.body.contentLength() == 0L) {
@@ -777,6 +858,15 @@ class MainActivity : AppCompatActivity() {
     private var currentAnimationLottieId: Int = -1
     private fun setLottieAnimation(animation: Int, width: Int, height: Int, isLooping: Boolean) {
         if(currentAnimationLottieId == animation) return
+
+        if(animation == R.raw.sync_idle) {
+            buttonFindPayment.isClickable = true
+            buttonFindPayment.isEnabled = true
+        } else {
+            buttonFindPayment.isClickable = false
+            buttonFindPayment.isEnabled = false
+        }
+
         buttonFindPayment.setAnimation(animation)
         buttonFindPayment.layoutParams.width = width
         buttonFindPayment.layoutParams.height = height
@@ -785,6 +875,7 @@ class MainActivity : AppCompatActivity() {
         currentAnimationLottieId = animation
     }
 
+    @RequiresApi(Build.VERSION_CODES.N)
     private fun openDialogPaymentProcessing(data: DataPayment) {
         runOnUiThread {
             val builder = AlertDialog.Builder(context)

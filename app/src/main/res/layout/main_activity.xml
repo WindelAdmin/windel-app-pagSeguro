@@ -10,7 +10,7 @@
 
 
     <TextView
-        android:id="@+id/textView"
+        android:id="@+id/txtLogo1"
         android:layout_width="150dp"
         android:layout_height="0dp"
         android:layout_marginTop="4dp"
@@ -20,17 +20,17 @@
         android:textColor="#0A2751"
         android:textSize="42sp"
         android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="@+id/imageView3"
+        app:layout_constraintEnd_toEndOf="@+id/imgLogo"
         app:layout_constraintHorizontal_bias="0.0"
-        app:layout_constraintStart_toStartOf="@+id/imageView3"
-        app:layout_constraintTop_toBottomOf="@+id/imageView3"
+        app:layout_constraintStart_toStartOf="@+id/imgLogo"
+        app:layout_constraintTop_toBottomOf="@+id/imgLogo"
         tools:ignore="HardcodedText" />
 
     <ImageView
-        android:id="@+id/imageView3"
-        android:layout_width="250dp"
-        android:layout_height="120dp"
-        android:layout_marginTop="96dp"
+        android:id="@+id/imgLogo"
+        android:layout_width="211dp"
+        android:layout_height="89dp"
+        android:layout_marginTop="75dp"
         android:cropToPadding="true"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.503"
@@ -40,7 +40,7 @@
         tools:ignore="ContentDescription" />
 
     <TextView
-        android:id="@+id/textView3"
+        android:id="@+id/txtLogo2"
         android:layout_width="wrap_content"
         android:layout_height="0dp"
         android:layout_marginStart="150dp"
@@ -50,10 +50,10 @@
         android:textColor="#0A2751"
         android:textSize="42sp"
         android:textStyle="bold"
-        app:layout_constraintEnd_toEndOf="@+id/imageView3"
+        app:layout_constraintEnd_toEndOf="@+id/imgLogo"
         app:layout_constraintHorizontal_bias="0.458"
-        app:layout_constraintStart_toStartOf="@+id/imageView3"
-        app:layout_constraintTop_toBottomOf="@+id/imageView3"
+        app:layout_constraintStart_toStartOf="@+id/imgLogo"
+        app:layout_constraintTop_toBottomOf="@+id/imgLogo"
         tools:ignore="HardcodedText" />
 
     <TextView
@@ -61,30 +61,29 @@
         android:layout_width="0dp"
         android:layout_height="75dp"
         android:layout_marginStart="10dp"
-        android:layout_marginTop="50dp"
         android:layout_marginEnd="10dp"
+        android:layout_marginBottom="-30dp"
         android:text="Aguardando pedido de pagamento"
         android:textAlignment="center"
         android:textColor="#373737"
-        android:textSize="20sp"
-        android:textStyle="bold"
+        android:textSize="18sp"
+        android:textStyle="normal"
         app:layout_constraintBottom_toTopOf="@+id/lottieAnimationView"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/textView"
-        app:layout_constraintVertical_bias="0.755"
         tools:ignore="HardcodedText" />
 
     <com.airbnb.lottie.LottieAnimationView
         android:id="@+id/lottieAnimationView"
         android:layout_width="400dp"
         android:layout_height="130dp"
-        android:layout_marginTop="-20dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginBottom="20dp"
+        app:layout_constraintBottom_toTopOf="@+id/buttonCloseDialog"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.496"
+        app:layout_constraintHorizontal_bias="0.454"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/lblStatus"
         app:lottie_loop="true"
         tools:ignore="MissingConstraints" />
 
@@ -173,5 +172,58 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintWidth="spread"
         tools:ignore="HardcodedText" />
+
+    <TextView
+        android:id="@+id/lblTransactionValue"
+        android:layout_width="wrap_content"
+        android:layout_height="35dp"
+        android:layout_marginStart="25dp"
+        android:layout_marginTop="170dp"
+        android:layout_marginEnd="25dp"
+        android:text="R$ 0,00"
+        android:textAlignment="center"
+        android:textColor="#505050"
+        android:textColorLink="#000000"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:visibility="invisible"
+        app:flow_verticalAlign="center"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.516"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
+    <TextView
+        android:id="@+id/lblTransactionType"
+        android:layout_width="wrap_content"
+        android:layout_height="35dp"
+        android:layout_marginStart="25dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="25dp"
+        android:text="DÉBITO"
+        android:textAlignment="center"
+        android:textColor="#505050"
+        android:textColorLink="#000000"
+        android:textSize="21sp"
+        android:textStyle="normal"
+        android:visibility="invisible"
+        app:flow_verticalAlign="center"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="0.513"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/lblTransactionValue" />
+
+    <View
+        android:id="@+id/divider"
+        android:layout_width="409dp"
+        android:layout_height="1dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="10dp"
+        android:background="?android:attr/listDivider"
+        android:visibility="invisible"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/lblTransactionType" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>
